@@ -8,6 +8,13 @@ This is a web-based OCR (Optical Character Recognition) and translation applicat
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+
+### Session Management Enhancement (August 13, 2025)
+- Added prominent user reminder to clear session for uploading additional files
+- Enhanced footer with tip about session clearing functionality
+- Improved translation error handling to prevent worker crashes from Google Translate timeouts
+
 ## System Architecture
 
 ### Frontend Architecture

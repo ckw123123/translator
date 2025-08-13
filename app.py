@@ -177,10 +177,14 @@ def translate_to_traditional_chinese(text):
                             else:
                                 translated_content = content
                         else:
-                            result = translator.translate(content, dest='zh-tw')
-                            if hasattr(result, 'text') and result.text:
-                                translated_content = result.text
-                            else:
+                            try:
+                                result = translator.translate(content, dest='zh-tw')
+                                if hasattr(result, 'text') and result.text:
+                                    translated_content = result.text
+                                else:
+                                    translated_content = content
+                            except Exception as translate_error:
+                                logging.warning(f"Translation failed, using original text: {translate_error}")
                                 translated_content = content
                         
                         # Reconstruct line with preserved indentation

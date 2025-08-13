@@ -138,3 +138,20 @@ footer {
     color: var(--bs-danger);
     border: 1px solid var(--bs-danger);
 }
+
+.alert-info {
+    background-color: rgba(var(--bs-info-rgb), 0.1);
+    color: var(--bs-info);
+    border: 1px solid var(--bs-info);
+}
+
+/* Footer responsive improvements */
+@media (max-width: 768px) {
+    footer .row {
+        text-align: center;
+    }
+    
+    footer .alert {
+        font-size: 0.9rem;
+    }
+}
