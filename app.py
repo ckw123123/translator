@@ -230,17 +230,14 @@ def upload_file():
         if 'session_id' not in session:
             session['session_id'] = str(uuid.uuid4())
         
-        # Generate secure filename with better handling for non-English characters
+        # Generate secure filename
         original_filename = file.filename or 'uploaded_file'
         filename = secure_filename(original_filename)
         
-        # If secure_filename removes all characters (e.g., Chinese filenames), create a fallback
-        if not filename or filename == '':
-            # Extract extension from original filename
+        # Fallback if filename is empty after sanitization
+        if not filename:
             _, ext = os.path.splitext(original_filename)
-            if not ext:
-                ext = '.txt'  # Default extension
-            filename = f'uploaded_file{ext}'
+            filename = f'uploaded_file{ext or ".txt"}'
         
         # Create session-specific filename with timestamp
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')

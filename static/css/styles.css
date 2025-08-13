@@ -145,6 +145,12 @@ footer {
     border: 1px solid var(--bs-info);
 }
 
+.alert-warning {
+    background-color: rgba(var(--bs-warning-rgb), 0.1);
+    color: var(--bs-warning);
+    border: 1px solid var(--bs-warning);
+}
+
 /* Footer responsive improvements */
 @media (max-width: 768px) {
     footer .row {

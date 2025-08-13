@@ -14,6 +14,7 @@ Preferred communication style: Simple, everyday language.
 - Added prominent user reminder to clear session for uploading additional files
 - Enhanced footer with tip about session clearing functionality
 - Improved translation error handling to prevent worker crashes from Google Translate timeouts
+- Added warning about using English/numeric characters only in file names for optimal performance
 
 ## System Architecture
 
