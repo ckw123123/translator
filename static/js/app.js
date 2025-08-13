@@ -40,6 +40,15 @@ function initializeDragAndDrop() {
         fileInput.click();
     });
     
+    // Handle choose file button click
+    const chooseFileBtn = document.getElementById('choose-file-btn');
+    if (chooseFileBtn) {
+        chooseFileBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            fileInput.click();
+        });
+    }
+    
     // Handle file input change
     fileInput.addEventListener('change', handleFileSelect);
 }
@@ -67,17 +76,26 @@ function handleDrop(e) {
 }
 
 function handleFileSelect(e) {
+    console.log('File selected:', e.target.files);
     const files = e.target.files;
     if (files.length > 0) {
+        console.log('Processing file:', files[0].name, 'Type:', files[0].type);
         handleFile(files[0]);
+    } else {
+        console.log('No files selected');
     }
 }
 
 function handleFile(file) {
-    // Validate file type
+    // Validate file type - check both MIME type and file extension
     const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
-    if (!allowedTypes.includes(file.type)) {
+    const fileName = file.name.toLowerCase();
+    const hasValidExtension = fileName.endsWith('.pdf') || fileName.endsWith('.png') || 
+                             fileName.endsWith('.jpg') || fileName.endsWith('.jpeg');
+    
+    if (!allowedTypes.includes(file.type) && !hasValidExtension) {
         showError('Invalid file type. Please upload PDF, PNG, or JPG files.');
+        console.log('File type:', file.type, 'File name:', file.name);
         return;
     }
     
@@ -93,6 +111,7 @@ function handleFile(file) {
     fileInfo.classList.remove('d-none');
     uploadBtn.disabled = false;
     hideError();
+    console.log('File selected successfully:', file.name, file.size, 'bytes');
 }
 
 function clearFile() {
