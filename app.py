@@ -36,6 +36,36 @@ def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+def clean_and_preserve_formatting(text):
+    """Clean up text while preserving formatting structure"""
+    if not text:
+        return ""
+    
+    # Split into lines and process each line
+    lines = text.split('\n')
+    cleaned_lines = []
+    
+    for line in lines:
+        # Strip trailing whitespace but preserve leading whitespace for indentation
+        line = line.rstrip()
+        
+        # Preserve empty lines for paragraph breaks
+        if not line.strip():
+            cleaned_lines.append('')
+            continue
+            
+        # Keep the line as is to preserve bullet points, numbers, and spacing
+        cleaned_lines.append(line)
+    
+    # Join lines and clean up excessive empty lines (max 2 consecutive)
+    result = '\n'.join(cleaned_lines)
+    
+    # Replace multiple consecutive newlines with max 2
+    import re
+    result = re.sub(r'\n{3,}', '\n\n', result)
+    
+    return result.strip()
+
 def extract_text_from_image(image_path):
     """Extract text from image using Tesseract OCR"""
     try:
@@ -46,9 +76,12 @@ def extract_text_from_image(image_path):
         if image.mode != 'RGB':
             image = image.convert('RGB')
         
-        # Use Tesseract to extract text
-        text = pytesseract.image_to_string(image, lang='eng+chi_sim+chi_tra')
-        return text.strip()
+        # Use Tesseract with PSM 6 (uniform block of text) to preserve structure
+        custom_config = r'--oem 3 --psm 6 -c preserve_interword_spaces=1'
+        text = pytesseract.image_to_string(image, lang='eng+chi_sim+chi_tra', config=custom_config)
+        
+        # Clean up text while preserving structure
+        return clean_and_preserve_formatting(text)
     except Exception as e:
         logging.error(f"Error extracting text from image: {str(e)}")
         raise
@@ -59,8 +92,10 @@ def extract_text_from_pdf(pdf_path):
         text = ""
         with open(pdf_path, 'rb') as file:
             pdf_reader = PyPDF2.PdfReader(file)
-            for page in pdf_reader.pages:
-                text += page.extract_text() + "\n"
+            for page_num, page in enumerate(pdf_reader.pages):
+                page_text = page.extract_text()
+                if page_text.strip():
+                    text += page_text + "\n\n"  # Add page breaks
         
         # If PDF text extraction failed or returned minimal text, try OCR
         if len(text.strip()) < 50:
@@ -69,39 +104,87 @@ def extract_text_from_pdf(pdf_path):
                 import pdf2image
                 images = pdf2image.convert_from_path(pdf_path)
                 ocr_text = ""
-                for image in images:
+                for i, image in enumerate(images):
                     # Save image temporarily
                     with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as temp_img:
                         image.save(temp_img.name)
-                        ocr_text += pytesseract.image_to_string(image, lang='eng+chi_sim+chi_tra') + "\n"
+                        custom_config = r'--oem 3 --psm 6 -c preserve_interword_spaces=1'
+                        page_text = pytesseract.image_to_string(image, lang='eng+chi_sim+chi_tra', config=custom_config)
+                        if page_text.strip():
+                            ocr_text += page_text + "\n\n"  # Add page breaks
                         os.unlink(temp_img.name)
                 if len(ocr_text.strip()) > len(text.strip()):
                     text = ocr_text
             except ImportError:
                 logging.warning("pdf2image not available, using text extraction only")
         
-        return text.strip()
+        return clean_and_preserve_formatting(text)
     except Exception as e:
         logging.error(f"Error extracting text from PDF: {str(e)}")
         raise
 
 def translate_to_traditional_chinese(text):
-    """Translate text to Traditional Chinese"""
+    """Translate text to Traditional Chinese while preserving formatting"""
     try:
         if not text.strip():
             return ""
         
-        # Split text into chunks if too long (Google Translate has limits)
-        max_chunk_size = 4500
-        chunks = [text[i:i+max_chunk_size] for i in range(0, len(text), max_chunk_size)]
+        # Split text into paragraphs to preserve structure
+        paragraphs = text.split('\n\n')
+        translated_paragraphs = []
         
-        translated_chunks = []
-        for chunk in chunks:
-            if chunk.strip():
-                result = translator.translate(chunk, dest='zh-tw')
-                translated_chunks.append(result.text)
+        for paragraph in paragraphs:
+            if not paragraph.strip():
+                translated_paragraphs.append('')
+                continue
+            
+            # Split long paragraphs into smaller chunks for translation
+            lines = paragraph.split('\n')
+            translated_lines = []
+            
+            for line in lines:
+                if not line.strip():
+                    translated_lines.append('')
+                    continue
+                
+                # Preserve leading spaces for bullet points and indentation
+                leading_spaces = len(line) - len(line.lstrip())
+                content = line.strip()
+                
+                if content:
+                    # Translate the content
+                    try:
+                        # Split very long lines if needed
+                        if len(content) > 4500:
+                            # Split by sentences or at reasonable points
+                            import re
+                            sentences = re.split(r'[.!?。！？]', content)
+                            translated_sentences = []
+                            for sentence in sentences:
+                                if sentence.strip():
+                                    result = translator.translate(sentence.strip(), dest='zh-tw')
+                                    translated_sentences.append(result.text)
+                            translated_content = '。'.join(translated_sentences)
+                        else:
+                            result = translator.translate(content, dest='zh-tw')
+                            translated_content = result.text
+                        
+                        # Reconstruct line with preserved indentation
+                        translated_line = ' ' * leading_spaces + translated_content
+                        translated_lines.append(translated_line)
+                    except Exception as trans_error:
+                        logging.warning(f"Error translating line: {trans_error}")
+                        # Fall back to original text if translation fails
+                        translated_lines.append(line)
+                else:
+                    translated_lines.append('')
+            
+            translated_paragraphs.append('\n'.join(translated_lines))
         
-        return '\n'.join(translated_chunks)
+        # Join paragraphs back with double newlines
+        result = '\n\n'.join(translated_paragraphs)
+        return clean_and_preserve_formatting(result)
+        
     except Exception as e:
         logging.error(f"Error translating text: {str(e)}")
         raise
@@ -128,7 +211,7 @@ def upload_file():
             return jsonify({'error': 'No file selected'}), 400
         
         # Validate file type
-        if not allowed_file(file.filename):
+        if not file.filename or not allowed_file(file.filename):
             return jsonify({'error': 'Invalid file type. Please upload PDF, PNG, or JPG files.'}), 400
         
         # Generate unique session ID if not exists
@@ -175,8 +258,11 @@ def upload_file():
     except Exception as e:
         logging.error(f"Error processing file: {str(e)}")
         # Clean up file if it exists
-        if 'filepath' in locals() and os.path.exists(filepath):
-            os.remove(filepath)
+        try:
+            if 'filepath' in locals() and os.path.exists(filepath):
+                os.remove(filepath)
+        except NameError:
+            pass
         return jsonify({'error': f'Error processing file: {str(e)}'}), 500
 
 @app.route('/clear')
@@ -199,7 +285,8 @@ def clear_session():
 def cleanup_files(error):
     """Clean up temporary files when session ends"""
     try:
-        if 'filepath' in session and os.path.exists(session['filepath']):
+        from flask import has_request_context
+        if has_request_context() and 'filepath' in session and os.path.exists(session['filepath']):
             os.remove(session['filepath'])
     except Exception as e:
         logging.error(f"Error in cleanup: {str(e)}")
