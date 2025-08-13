@@ -10,6 +10,7 @@ from googletrans import Translator
 import uuid
 import tempfile
 import shutil
+import time
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -129,83 +130,75 @@ def translate_to_traditional_chinese(text):
         if not text.strip():
             return ""
         
-        # Split text into paragraphs to preserve structure
+        # Create translator with better error handling
+        translator = Translator(timeout=20)
+        
+        # Split text into smaller chunks to avoid API limits and parsing errors
+        max_chunk_size = 2000  # Reduced chunk size to avoid parsing issues
+        chunks = []
+        
+        # Split by paragraphs first, then by size if needed
         paragraphs = text.split('\n\n')
-        translated_paragraphs = []
+        current_chunk = ""
         
         for paragraph in paragraphs:
             if not paragraph.strip():
-                translated_paragraphs.append('')
+                if current_chunk:
+                    current_chunk += '\n\n'
                 continue
-            
-            # Split long paragraphs into smaller chunks for translation
-            lines = paragraph.split('\n')
-            translated_lines = []
-            
-            for line in lines:
-                if not line.strip():
-                    translated_lines.append('')
-                    continue
                 
-                # Preserve leading spaces for bullet points and indentation
-                leading_spaces = len(line) - len(line.lstrip())
-                content = line.strip()
-                
-                if content:
-                    # Translate the content
-                    try:
-                        # Split very long lines if needed
-                        if len(content) > 4500:
-                            # Split by sentences or at reasonable points
-                            import re
-                            sentences = re.split(r'[.!?。！？]', content)
-                            translated_sentences = []
-                            for sentence in sentences:
-                                if sentence.strip():
-                                    try:
-                                        result = translator.translate(sentence.strip(), dest='zh-tw')
-                                        if hasattr(result, 'text') and result.text:
-                                            translated_sentences.append(result.text)
-                                        else:
-                                            translated_sentences.append(sentence.strip())
-                                    except Exception as sent_error:
-                                        logging.warning(f"Error translating sentence: {sent_error}")
-                                        translated_sentences.append(sentence.strip())
-                            
-                            if translated_sentences:
-                                translated_content = '。'.join(translated_sentences)
-                            else:
-                                translated_content = content
-                        else:
-                            try:
-                                result = translator.translate(content, dest='zh-tw')
-                                if hasattr(result, 'text') and result.text:
-                                    translated_content = result.text
-                                else:
-                                    translated_content = content
-                            except Exception as translate_error:
-                                logging.warning(f"Translation failed, using original text: {translate_error}")
-                                translated_content = content
-                        
-                        # Reconstruct line with preserved indentation
-                        translated_line = ' ' * leading_spaces + translated_content
-                        translated_lines.append(translated_line)
-                    except Exception as trans_error:
-                        logging.warning(f"Error translating line: {trans_error}")
-                        # Fall back to original text if translation fails
-                        translated_lines.append(line)
-                else:
-                    translated_lines.append('')
-            
-            translated_paragraphs.append('\n'.join(translated_lines))
+            # If adding this paragraph would exceed chunk size, save current chunk
+            if len(current_chunk) + len(paragraph) > max_chunk_size and current_chunk:
+                chunks.append(current_chunk.strip())
+                current_chunk = paragraph
+            else:
+                if current_chunk:
+                    current_chunk += '\n\n'
+                current_chunk += paragraph
         
-        # Join paragraphs back with double newlines
-        result = '\n\n'.join(translated_paragraphs)
+        # Add the last chunk
+        if current_chunk:
+            chunks.append(current_chunk.strip())
+        
+        # Translate each chunk
+        translated_chunks = []
+        for i, chunk in enumerate(chunks):
+            if not chunk.strip():
+                translated_chunks.append(chunk)
+                continue
+                
+            try:
+                # Attempt translation with retries
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
+                        result = translator.translate(chunk.strip(), dest='zh-tw')
+                        if result and hasattr(result, 'text') and result.text:
+                            translated_chunks.append(result.text)
+                            break
+                        else:
+                            if attempt == max_retries - 1:
+                                logging.warning(f"Translation returned empty result for chunk {i+1}, using original")
+                                translated_chunks.append(chunk)
+                    except Exception as e:
+                        if attempt == max_retries - 1:
+                            logging.warning(f"Translation failed for chunk {i+1} after {max_retries} attempts: {e}")
+                            translated_chunks.append(chunk)
+                        else:
+                            time.sleep(1)  # Brief delay before retry
+                            
+            except Exception as chunk_error:
+                logging.error(f"Error translating chunk {i+1}: {chunk_error}")
+                translated_chunks.append(chunk)
+        
+        # Join translated chunks
+        result = '\n\n'.join(translated_chunks)
         return clean_and_preserve_formatting(result)
         
     except Exception as e:
-        logging.error(f"Error translating text: {str(e)}")
-        raise
+        logging.error(f"Error in translation function: {str(e)}")
+        # Return original text if translation completely fails
+        return text
 
 @app.route('/')
 def index():
@@ -236,9 +229,22 @@ def upload_file():
         if 'session_id' not in session:
             session['session_id'] = str(uuid.uuid4())
         
-        # Save uploaded file
-        filename = secure_filename(file.filename)
-        session_filename = f"{session['session_id']}_{filename}"
+        # Generate secure filename with better handling for non-English characters
+        original_filename = file.filename or 'uploaded_file'
+        filename = secure_filename(original_filename)
+        
+        # If secure_filename removes all characters (e.g., Chinese filenames), create a fallback
+        if not filename or filename == '':
+            # Extract extension from original filename
+            _, ext = os.path.splitext(original_filename)
+            if not ext:
+                ext = '.txt'  # Default extension
+            filename = f'uploaded_file{ext}'
+        
+        # Create session-specific filename with timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        name, ext = os.path.splitext(filename)
+        session_filename = f"{session['session_id']}_{name}_{timestamp}{ext}"
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], session_filename)
         file.save(filepath)
         
@@ -260,17 +266,17 @@ def upload_file():
         # Translate to Traditional Chinese
         translated_text = translate_to_traditional_chinese(original_text)
         
-        # Store in session
+        # Store in session (use original filename for display, but sanitized for processing)
         session['original_text'] = original_text
         session['translated_text'] = translated_text
-        session['filename'] = filename
+        session['filename'] = original_filename  # Store original filename for display
         session['filepath'] = filepath
         
         return jsonify({
             'success': True,
             'original_text': original_text,
             'translated_text': translated_text,
-            'filename': filename
+            'filename': original_filename  # Return original filename for display
         })
         
     except Exception as e:
