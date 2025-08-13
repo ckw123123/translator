@@ -131,75 +131,92 @@ def translate_to_traditional_chinese(text):
         if not text.strip():
             return ""
         
-        # Create translator with better error handling
-        translator = Translator(timeout=20)
+        # Try multiple translation approaches for better reliability
+        translated_text = None
         
-        # Split text into smaller chunks to avoid API limits and parsing errors
-        max_chunk_size = 2000  # Reduced chunk size to avoid parsing issues
-        chunks = []
-        
-        # Split by paragraphs first, then by size if needed
-        paragraphs = text.split('\n\n')
-        current_chunk = ""
-        
-        for paragraph in paragraphs:
-            if not paragraph.strip():
-                if current_chunk:
-                    current_chunk += '\n\n'
-                continue
+        # Approach 1: Try with default googletrans
+        try:
+            translator = Translator()
+            # Split text into smaller chunks (500 chars max for better reliability)
+            chunks = []
+            current_chunk = ""
+            
+            # Process text line by line to preserve formatting
+            lines = text.split('\n')
+            for line in lines:
+                if len(current_chunk + line + '\n') > 500 and current_chunk:
+                    chunks.append(current_chunk.rstrip())
+                    current_chunk = line + '\n'
+                else:
+                    current_chunk += line + '\n'
+            
+            if current_chunk:
+                chunks.append(current_chunk.rstrip())
+            
+            translated_chunks = []
+            for chunk in chunks:
+                if not chunk.strip():
+                    translated_chunks.append(chunk)
+                    continue
+                    
+                try:
+                    # Simple direct translation
+                    result = translator.translate(chunk.strip(), src='auto', dest='zh-tw')
+                    if result and hasattr(result, 'text') and result.text and result.text.strip():
+                        translated_chunks.append(result.text)
+                    else:
+                        # Fallback to original if empty result
+                        translated_chunks.append(chunk)
+                        
+                except Exception as chunk_e:
+                    logging.warning(f"Chunk translation failed: {chunk_e}")
+                    translated_chunks.append(chunk)
+                    
+            if translated_chunks:
+                translated_text = '\n'.join(translated_chunks)
                 
-            # If adding this paragraph would exceed chunk size, save current chunk
-            if len(current_chunk) + len(paragraph) > max_chunk_size and current_chunk:
-                chunks.append(current_chunk.strip())
-                current_chunk = paragraph
-            else:
-                if current_chunk:
-                    current_chunk += '\n\n'
-                current_chunk += paragraph
+        except Exception as main_e:
+            logging.warning(f"Primary translation method failed: {main_e}")
         
-        # Add the last chunk
-        if current_chunk:
-            chunks.append(current_chunk.strip())
-        
-        # Translate each chunk
-        translated_chunks = []
-        for i, chunk in enumerate(chunks):
-            if not chunk.strip():
-                translated_chunks.append(chunk)
-                continue
-                
+        # If translation failed or result is same as original, try simpler approach
+        if not translated_text or translated_text == text:
             try:
-                # Attempt translation with retries
-                max_retries = 3
-                for attempt in range(max_retries):
-                    try:
-                        result = translator.translate(chunk.strip(), dest='zh-tw')
-                        if result and hasattr(result, 'text') and result.text:
-                            translated_chunks.append(result.text)
-                            break
-                        else:
-                            if attempt == max_retries - 1:
-                                logging.warning(f"Translation returned empty result for chunk {i+1}, using original")
-                                translated_chunks.append(chunk)
-                    except Exception as e:
-                        if attempt == max_retries - 1:
-                            logging.warning(f"Translation failed for chunk {i+1} after {max_retries} attempts: {e}")
-                            translated_chunks.append(chunk)
-                        else:
-                            time.sleep(1)  # Brief delay before retry
-                            
-            except Exception as chunk_error:
-                logging.error(f"Error translating chunk {i+1}: {chunk_error}")
-                translated_chunks.append(chunk)
+                # Approach 2: Simple sentence-by-sentence translation
+                translator = Translator(timeout=10)
+                sentences = text.split('.')
+                translated_sentences = []
+                
+                for sentence in sentences:
+                    if sentence.strip():
+                        try:
+                            result = translator.translate(sentence.strip(), dest='zh-tw')
+                            if result and hasattr(result, 'text') and result.text:
+                                translated_sentences.append(result.text)
+                            else:
+                                translated_sentences.append(sentence.strip())
+                        except:
+                            translated_sentences.append(sentence.strip())
+                    else:
+                        translated_sentences.append('')
+                        
+                if translated_sentences:
+                    translated_text = '。'.join(translated_sentences)
+                    
+            except Exception as fallback_e:
+                logging.warning(f"Fallback translation failed: {fallback_e}")
         
-        # Join translated chunks
-        result = '\n\n'.join(translated_chunks)
-        return clean_and_preserve_formatting(result)
-        
+        # Final validation and cleanup
+        if translated_text and translated_text.strip() and translated_text != text:
+            return clean_and_preserve_formatting(translated_text)
+        else:
+            # If all translation attempts failed, return a notice with original text
+            notice = "翻譯服務暫時不可用，以下為原始文本：\n\n"
+            return notice + text
+            
     except Exception as e:
-        logging.error(f"Error in translation function: {str(e)}")
-        # Return original text if translation completely fails
-        return text
+        logging.error(f"Translation function completely failed: {str(e)}")
+        # Return original text with error notice
+        return f"翻譯出現錯誤，以下為原始文本：\n\n{text}"
 
 @app.route('/')
 def index():
