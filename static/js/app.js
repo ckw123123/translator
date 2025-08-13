@@ -75,22 +75,26 @@ function handleFileSelect(e) {
         const file = files[0];
         console.log('Processing file:', file.name, 'Type:', file.type, 'Size:', file.size);
         
-        // Test direct DOM manipulation
+        // Direct file name display - bypass handleFile function for display
         const fileNameElement = document.getElementById('file-name');
         const fileInfoElement = document.getElementById('file-info');
+        const uploadButton = document.getElementById('upload-btn');
+        
         console.log('Direct lookup - fileNameElement:', fileNameElement);
         console.log('Direct lookup - fileInfoElement:', fileInfoElement);
         
-        if (fileNameElement) {
+        if (fileNameElement && fileInfoElement && uploadButton) {
             fileNameElement.textContent = file.name;
-            console.log('Set file name directly:', fileNameElement.textContent);
-        }
-        
-        if (fileInfoElement) {
             fileInfoElement.classList.remove('d-none');
-            console.log('Made file info visible');
+            uploadButton.disabled = false;
+            selectedFile = file;
+            console.log('Set file name directly:', fileNameElement.textContent);
+            console.log('Made file info visible and enabled upload button');
+        } else {
+            console.error('One or more required elements not found');
         }
         
+        // Still call handleFile for validation
         handleFile(file);
     } else {
         console.log('No files selected');
@@ -98,6 +102,8 @@ function handleFileSelect(e) {
 }
 
 function handleFile(file) {
+    console.log('handleFile called with:', file.name);
+    
     // Validate file type - check both MIME type and file extension
     const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
     const fileName = file.name.toLowerCase();
@@ -107,6 +113,7 @@ function handleFile(file) {
     if (!allowedTypes.includes(file.type) && !hasValidExtension) {
         showError('Invalid file type. Please upload PDF, PNG, or JPG files.');
         console.log('File type:', file.type, 'File name:', file.name);
+        clearFile();
         return;
     }
     
@@ -114,32 +121,38 @@ function handleFile(file) {
     const maxSize = 16 * 1024 * 1024;
     if (file.size > maxSize) {
         showError('File size exceeds 16MB limit. Please choose a smaller file.');
+        clearFile();
         return;
     }
     
+    // File is valid - ensure UI is updated
     selectedFile = file;
-    console.log('Setting file name:', file.name);
-    console.log('fileName element:', fileName);
     
-    if (fileName) {
-        fileName.textContent = file.name;
-        console.log('File name set to:', fileName.textContent);
-    } else {
-        console.error('fileName element not found!');
+    // Get fresh references to elements
+    const fileNameElem = document.getElementById('file-name');
+    const fileInfoElem = document.getElementById('file-info');
+    const uploadBtnElem = document.getElementById('upload-btn');
+    
+    console.log('Setting file name to:', file.name);
+    console.log('fileNameElem:', fileNameElem);
+    
+    if (fileNameElem) {
+        fileNameElem.textContent = file.name;
+        console.log('File name set to:', fileNameElem.textContent);
     }
     
-    if (fileInfo) {
-        fileInfo.classList.remove('d-none');
-    } else {
-        console.error('fileInfo element not found!');
+    if (fileInfoElem) {
+        fileInfoElem.classList.remove('d-none');
+        console.log('File info made visible');
     }
     
-    if (uploadBtn) {
-        uploadBtn.disabled = false;
+    if (uploadBtnElem) {
+        uploadBtnElem.disabled = false;
+        console.log('Upload button enabled');
     }
     
     hideError();
-    console.log('File selected successfully:', file.name, file.size, 'bytes');
+    console.log('File validation completed successfully:', file.name, file.size, 'bytes');
 }
 
 function clearFile() {
