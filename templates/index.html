@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OCR & Translation Tool</title>
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/styles.css') }}" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-eye me-2"></i>
+                OCR & Translation Tool
+            </a>
+            <button class="btn btn-outline-secondary" onclick="clearSession()">
+                <i class="fas fa-trash me-1"></i>
+                Clear Session
+            </button>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- File Upload Section -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-upload me-2"></i>
+                            Upload File for OCR & Translation
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="drop-zone" class="drop-zone text-center p-5 border border-2 border-dashed rounded">
+                            <i class="fas fa-cloud-upload-alt fa-3x mb-3 text-muted"></i>
+                            <h5>Drag & Drop your file here</h5>
+                            <p class="text-muted">or click to browse</p>
+                            <p class="small text-muted">Supported formats: PDF, PNG, JPG, JPEG (Max: 16MB)</p>
+                            <input type="file" id="file-input" class="d-none" accept=".pdf,.png,.jpg,.jpeg">
+                            <button type="button" class="btn btn-primary" onclick="document.getElementById('file-input').click()">
+                                <i class="fas fa-folder-open me-2"></i>
+                                Choose File
+                            </button>
+                        </div>
+                        
+                        <!-- Selected file info -->
+                        <div id="file-info" class="mt-3 d-none">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-file me-2"></i>
+                                <span id="file-name"></span>
+                                <button type="button" class="btn btn-sm btn-outline-danger ms-auto" onclick="clearFile()">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Upload button -->
+                        <div class="mt-3">
+                            <button id="upload-btn" type="button" class="btn btn-success" onclick="uploadFile()" disabled>
+                                <i class="fas fa-magic me-2"></i>
+                                Extract Text & Translate
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading indicator -->
+        <div id="loading" class="text-center d-none mb-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Processing...</span>
+            </div>
+            <p class="mt-2">Processing your file... This may take a moment.</p>
+        </div>
+
+        <!-- Results Section -->
+        <div id="results" class="d-none">
+            <div class="row">
+                <!-- Original Text -->
+                <div class="col-lg-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-file-alt me-2"></i>
+                                Original Text
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="position-relative">
+                                <pre id="original-text" class="text-wrap bg-dark p-3 rounded" style="max-height: 400px; overflow-y: auto; white-space: pre-wrap;"></pre>
+                                <button class="btn btn-sm btn-outline-secondary position-absolute top-0 end-0 m-2" onclick="copyText('original-text')" title="Copy to clipboard">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Translated Text -->
+                <div class="col-lg-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-language me-2"></i>
+                                Traditional Chinese Translation
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="position-relative">
+                                <pre id="translated-text" class="text-wrap bg-dark p-3 rounded" style="max-height: 400px; overflow-y: auto; white-space: pre-wrap;"></pre>
+                                <button class="btn btn-sm btn-outline-secondary position-absolute top-0 end-0 m-2" onclick="copyText('translated-text')" title="Copy to clipboard">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action buttons -->
+            <div class="text-center mb-4">
+                <button class="btn btn-primary me-2" onclick="location.reload()">
+                    <i class="fas fa-plus me-2"></i>
+                    Process Another File
+                </button>
+                <button class="btn btn-outline-secondary" onclick="clearSession()">
+                    <i class="fas fa-trash me-2"></i>
+                    Clear All Data
+                </button>
+            </div>
+        </div>
+
+        <!-- Error alert -->
+        <div id="error-alert" class="alert alert-danger d-none" role="alert">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <span id="error-message"></span>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-dark border-top mt-5 py-4">
+        <div class="container text-center">
+            <p class="text-muted mb-0">
+                <i class="fas fa-info-circle me-1"></i>
+                All uploaded files and extracted text are stored temporarily in your session and will be automatically deleted when you close or refresh the page.
+            </p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

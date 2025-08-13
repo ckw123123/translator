@@ -1,0 +1,219 @@
+// OCR & Translation Tool JavaScript
+
+let selectedFile = null;
+
+// DOM elements
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+const fileInfo = document.getElementById('file-info');
+const fileName = document.getElementById('file-name');
+const uploadBtn = document.getElementById('upload-btn');
+const loading = document.getElementById('loading');
+const results = document.getElementById('results');
+const errorAlert = document.getElementById('error-alert');
+const errorMessage = document.getElementById('error-message');
+const originalText = document.getElementById('original-text');
+const translatedText = document.getElementById('translated-text');
+
+// Initialize drag and drop functionality
+function initializeDragAndDrop() {
+    // Prevent default drag behaviors
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+        document.body.addEventListener(eventName, preventDefaults, false);
+    });
+
+    // Highlight drop zone when item is dragged over it
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, highlight, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, unhighlight, false);
+    });
+
+    // Handle dropped files
+    dropZone.addEventListener('drop', handleDrop, false);
+    
+    // Handle click to select file
+    dropZone.addEventListener('click', () => {
+        fileInput.click();
+    });
+    
+    // Handle file input change
+    fileInput.addEventListener('change', handleFileSelect);
+}
+
+function preventDefaults(e) {
+    e.preventDefault();
+    e.stopPropagation();
+}
+
+function highlight(e) {
+    dropZone.classList.add('dragover');
+}
+
+function unhighlight(e) {
+    dropZone.classList.remove('dragover');
+}
+
+function handleDrop(e) {
+    const dt = e.dataTransfer;
+    const files = dt.files;
+    
+    if (files.length > 0) {
+        handleFile(files[0]);
+    }
+}
+
+function handleFileSelect(e) {
+    const files = e.target.files;
+    if (files.length > 0) {
+        handleFile(files[0]);
+    }
+}
+
+function handleFile(file) {
+    // Validate file type
+    const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
+    if (!allowedTypes.includes(file.type)) {
+        showError('Invalid file type. Please upload PDF, PNG, or JPG files.');
+        return;
+    }
+    
+    // Validate file size (16MB)
+    const maxSize = 16 * 1024 * 1024;
+    if (file.size > maxSize) {
+        showError('File size exceeds 16MB limit. Please choose a smaller file.');
+        return;
+    }
+    
+    selectedFile = file;
+    fileName.textContent = file.name;
+    fileInfo.classList.remove('d-none');
+    uploadBtn.disabled = false;
+    hideError();
+}
+
+function clearFile() {
+    selectedFile = null;
+    fileInput.value = '';
+    fileInfo.classList.add('d-none');
+    uploadBtn.disabled = true;
+    hideError();
+}
+
+function uploadFile() {
+    if (!selectedFile) {
+        showError('Please select a file first.');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    
+    // Show loading state
+    loading.classList.remove('d-none');
+    uploadBtn.disabled = true;
+    hideError();
+    hideResults();
+    
+    fetch('/upload', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        loading.classList.add('d-none');
+        
+        if (data.error) {
+            showError(data.error);
+            uploadBtn.disabled = false;
+        } else {
+            // Display results
+            originalText.textContent = data.original_text;
+            translatedText.textContent = data.translated_text;
+            results.classList.remove('d-none');
+            
+            // Scroll to results
+            results.scrollIntoView({ behavior: 'smooth' });
+        }
+    })
+    .catch(error => {
+        loading.classList.add('d-none');
+        uploadBtn.disabled = false;
+        showError('An error occurred while processing the file. Please try again.');
+        console.error('Error:', error);
+    });
+}
+
+function copyText(elementId) {
+    const element = document.getElementById(elementId);
+    const text = element.textContent;
+    
+    navigator.clipboard.writeText(text).then(() => {
+        // Show temporary success message
+        const button = element.parentElement.querySelector('button');
+        const originalIcon = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-check"></i>';
+        button.classList.remove('btn-outline-secondary');
+        button.classList.add('btn-success');
+        
+        setTimeout(() => {
+            button.innerHTML = originalIcon;
+            button.classList.remove('btn-success');
+            button.classList.add('btn-outline-secondary');
+        }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy text: ', err);
+        showError('Failed to copy text to clipboard.');
+    });
+}
+
+function clearSession() {
+    if (confirm('Are you sure you want to clear all data? This action cannot be undone.')) {
+        window.location.href = '/clear';
+    }
+}
+
+function showError(message) {
+    errorMessage.textContent = message;
+    errorAlert.classList.remove('d-none');
+    errorAlert.scrollIntoView({ behavior: 'smooth' });
+}
+
+function hideError() {
+    errorAlert.classList.add('d-none');
+}
+
+function hideResults() {
+    results.classList.add('d-none');
+}
+
+// Initialize the application
+document.addEventListener('DOMContentLoaded', function() {
+    initializeDragAndDrop();
+    
+    // Auto-hide alerts after 10 seconds
+    setTimeout(() => {
+        hideError();
+    }, 10000);
+});
+
+// Handle page visibility change to warn about session data
+document.addEventListener('visibilitychange', function() {
+    if (document.hidden && selectedFile) {
+        // Page is being hidden, data will be lost on refresh
+        console.log('Page hidden - session data will be cleared on refresh');
+    }
+});
+
+// Warn user before leaving if there's processed data
+window.addEventListener('beforeunload', function(e) {
+    const hasResults = !results.classList.contains('d-none');
+    if (hasResults) {
+        e.preventDefault();
+        e.returnValue = 'You have processed text that will be lost. Are you sure you want to leave?';
+        return e.returnValue;
+    }
+});

@@ -1,0 +1,2 @@
+# This file ensures the uploads directory is created
+# Temporary upload files will be stored here and automatically cleaned up
