@@ -162,12 +162,26 @@ def translate_to_traditional_chinese(text):
                             translated_sentences = []
                             for sentence in sentences:
                                 if sentence.strip():
-                                    result = translator.translate(sentence.strip(), dest='zh-tw')
-                                    translated_sentences.append(result.text)
-                            translated_content = '。'.join(translated_sentences)
+                                    try:
+                                        result = translator.translate(sentence.strip(), dest='zh-tw')
+                                        if hasattr(result, 'text') and result.text:
+                                            translated_sentences.append(result.text)
+                                        else:
+                                            translated_sentences.append(sentence.strip())
+                                    except Exception as sent_error:
+                                        logging.warning(f"Error translating sentence: {sent_error}")
+                                        translated_sentences.append(sentence.strip())
+                            
+                            if translated_sentences:
+                                translated_content = '。'.join(translated_sentences)
+                            else:
+                                translated_content = content
                         else:
                             result = translator.translate(content, dest='zh-tw')
-                            translated_content = result.text
+                            if hasattr(result, 'text') and result.text:
+                                translated_content = result.text
+                            else:
+                                translated_content = content
                         
                         # Reconstruct line with preserved indentation
                         translated_line = ' ' * leading_spaces + translated_content
@@ -259,9 +273,11 @@ def upload_file():
         logging.error(f"Error processing file: {str(e)}")
         # Clean up file if it exists
         try:
-            if 'filepath' in locals() and os.path.exists(filepath):
-                os.remove(filepath)
-        except NameError:
+            if 'filepath' in locals() and 'filepath' in vars():
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+        except (NameError, UnboundLocalError, NameError):
+            # If filepath wasn't created, nothing to clean up
             pass
         return jsonify({'error': f'Error processing file: {str(e)}'}), 500
 
