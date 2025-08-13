@@ -66,11 +66,32 @@ function handleDrop(e) {
 }
 
 function handleFileSelect(e) {
-    console.log('File selected:', e.target.files);
+    console.log('File input changed!');
+    console.log('Files:', e.target.files);
+    console.log('Files length:', e.target.files.length);
+    
     const files = e.target.files;
     if (files.length > 0) {
-        console.log('Processing file:', files[0].name, 'Type:', files[0].type);
-        handleFile(files[0]);
+        const file = files[0];
+        console.log('Processing file:', file.name, 'Type:', file.type, 'Size:', file.size);
+        
+        // Test direct DOM manipulation
+        const fileNameElement = document.getElementById('file-name');
+        const fileInfoElement = document.getElementById('file-info');
+        console.log('Direct lookup - fileNameElement:', fileNameElement);
+        console.log('Direct lookup - fileInfoElement:', fileInfoElement);
+        
+        if (fileNameElement) {
+            fileNameElement.textContent = file.name;
+            console.log('Set file name directly:', fileNameElement.textContent);
+        }
+        
+        if (fileInfoElement) {
+            fileInfoElement.classList.remove('d-none');
+            console.log('Made file info visible');
+        }
+        
+        handleFile(file);
     } else {
         console.log('No files selected');
     }
@@ -230,6 +251,14 @@ function initializeElements() {
     errorMessage = document.getElementById('error-message');
     originalText = document.getElementById('original-text');
     translatedText = document.getElementById('translated-text');
+    
+    // Debug: Log each element
+    console.log('Elements found:');
+    console.log('- dropZone:', dropZone ? 'Found' : 'NOT FOUND');
+    console.log('- fileInput:', fileInput ? 'Found' : 'NOT FOUND');
+    console.log('- fileInfo:', fileInfo ? 'Found' : 'NOT FOUND');
+    console.log('- fileName:', fileName ? 'Found' : 'NOT FOUND');
+    console.log('- uploadBtn:', uploadBtn ? 'Found' : 'NOT FOUND');
 }
 
 // Initialize the application
