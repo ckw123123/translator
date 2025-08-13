@@ -2,18 +2,8 @@
 
 let selectedFile = null;
 
-// DOM elements
-const dropZone = document.getElementById('drop-zone');
-const fileInput = document.getElementById('file-input');
-const fileInfo = document.getElementById('file-info');
-const fileName = document.getElementById('file-name');
-const uploadBtn = document.getElementById('upload-btn');
-const loading = document.getElementById('loading');
-const results = document.getElementById('results');
-const errorAlert = document.getElementById('error-alert');
-const errorMessage = document.getElementById('error-message');
-const originalText = document.getElementById('original-text');
-const translatedText = document.getElementById('translated-text');
+// DOM elements - will be initialized when DOM is ready
+let dropZone, fileInput, fileInfo, fileName, uploadBtn, loading, results, errorAlert, errorMessage, originalText, translatedText;
 
 // Initialize drag and drop functionality
 function initializeDragAndDrop() {
@@ -209,14 +199,47 @@ function hideResults() {
     results.classList.add('d-none');
 }
 
+// Initialize DOM elements
+function initializeElements() {
+    dropZone = document.getElementById('drop-zone');
+    fileInput = document.getElementById('file-input');
+    fileInfo = document.getElementById('file-info');
+    fileName = document.getElementById('file-name');
+    uploadBtn = document.getElementById('upload-btn');
+    loading = document.getElementById('loading');
+    results = document.getElementById('results');
+    errorAlert = document.getElementById('error-alert');
+    errorMessage = document.getElementById('error-message');
+    originalText = document.getElementById('original-text');
+    translatedText = document.getElementById('translated-text');
+}
+
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, initializing app...');
+    
+    // Initialize DOM elements
+    initializeElements();
+    
+    // Check if all elements are found
+    console.log('Drop zone:', dropZone);
+    console.log('File input:', fileInput);
+    console.log('Upload button:', uploadBtn);
+    
+    if (!dropZone || !fileInput || !uploadBtn) {
+        console.error('Required DOM elements not found!');
+        showError('Failed to initialize application. Please refresh the page.');
+        return;
+    }
+    
     initializeDragAndDrop();
     
     // Auto-hide alerts after 10 seconds
     setTimeout(() => {
         hideError();
     }, 10000);
+    
+    console.log('App initialized successfully');
 });
 
 // Handle page visibility change to warn about session data
