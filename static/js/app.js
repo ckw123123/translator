@@ -97,19 +97,37 @@ function handleFile(file) {
     }
     
     selectedFile = file;
-    fileName.textContent = file.name;
-    fileInfo.classList.remove('d-none');
-    uploadBtn.disabled = false;
+    console.log('Setting file name:', file.name);
+    console.log('fileName element:', fileName);
+    
+    if (fileName) {
+        fileName.textContent = file.name;
+        console.log('File name set to:', fileName.textContent);
+    } else {
+        console.error('fileName element not found!');
+    }
+    
+    if (fileInfo) {
+        fileInfo.classList.remove('d-none');
+    } else {
+        console.error('fileInfo element not found!');
+    }
+    
+    if (uploadBtn) {
+        uploadBtn.disabled = false;
+    }
+    
     hideError();
     console.log('File selected successfully:', file.name, file.size, 'bytes');
 }
 
 function clearFile() {
     selectedFile = null;
-    fileInput.value = '';
-    fileInfo.classList.add('d-none');
-    uploadBtn.disabled = true;
+    if (fileInput) fileInput.value = '';
+    if (fileInfo) fileInfo.classList.add('d-none');
+    if (uploadBtn) uploadBtn.disabled = true;
     hideError();
+    console.log('File cleared');
 }
 
 function uploadFile() {
