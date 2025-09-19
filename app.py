@@ -13,6 +13,9 @@ import shutil
 import time
 from datetime import datetime
 
+# Explicitly set Tesseract path
+pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
+
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 
