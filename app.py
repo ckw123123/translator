@@ -12,6 +12,10 @@ import tempfile
 import shutil
 import time
 from datetime import datetime
+import requests
+
+# Use your real OCR.space API key (fallback to demo if not set)
+OCR_SPACE_API_KEY = os.environ.get("OCR_SPACE_API_KEY", "helloworld")
 
 # Explicitly set Tesseract path
 pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
@@ -87,68 +91,78 @@ def clean_and_preserve_formatting(text):
 
 
 def extract_text_from_image(image_path):
-    """Extract text from image using Tesseract OCR"""
+    """Try OCR.space first, then fallback to local Tesseract"""
     try:
-        # Open and preprocess image
-        image = Image.open(image_path)
+        with open(image_path, 'rb') as f:
+            r = requests.post(
+                "https://api.ocr.space/parse/image",
+                files={"file": f},
+                data={
+                    "apikey": OCR_SPACE_API_KEY,
+                    "language":
+                    "eng,chs,cht",  # English + Simplified + Traditional Chinese
+                },
+                timeout=60)
+        result = r.json()
 
-        # Convert to RGB if necessary
+        if "ParsedResults" in result and result["ParsedResults"]:
+            parsed_text = result["ParsedResults"][0].get("ParsedText", "")
+            if parsed_text.strip():
+                return clean_and_preserve_formatting(parsed_text)
+
+    except Exception as e:
+        logging.warning(f"OCR.space failed: {e}")
+
+    # Fallback: Tesseract
+    try:
+        image = Image.open(image_path)
         if image.mode != 'RGB':
             image = image.convert('RGB')
-
-        # Use Tesseract with PSM 6 (uniform block of text) to preserve structure
         custom_config = r'--oem 3 --psm 6 -c preserve_interword_spaces=1'
         text = pytesseract.image_to_string(image,
                                            lang='eng+chi_sim+chi_tra',
                                            config=custom_config)
-
-        # Clean up text while preserving structure
         return clean_and_preserve_formatting(text)
     except Exception as e:
-        logging.error(f"Error extracting text from image: {str(e)}")
+        logging.error(f"Tesseract fallback failed: {e}")
         raise
 
 
-def extract_text_from_pdf(pdf_path):
-    """Extract text from PDF"""
+def extract_text_from_pdf_local(pdf_path):
+    """Fallback: Extract text from PDF using PyPDF2 and Tesseract OCR if needed"""
     try:
         text = ""
         with open(pdf_path, 'rb') as file:
             pdf_reader = PyPDF2.PdfReader(file)
             for page_num, page in enumerate(pdf_reader.pages):
                 page_text = page.extract_text()
-                if page_text.strip():
-                    text += page_text + "\n\n"  # Add page breaks
+                if page_text and page_text.strip():
+                    text += page_text + "\n\n"
 
-        # If PDF text extraction failed or returned minimal text, try OCR
+        # If PDF text extraction was too weak, try OCR per page
         if len(text.strip()) < 50:
-            # Convert PDF pages to images and OCR them
             try:
                 import pdf2image
                 images = pdf2image.convert_from_path(pdf_path)
                 ocr_text = ""
-                for i, image in enumerate(images):
-                    # Save image temporarily
-                    with tempfile.NamedTemporaryFile(suffix='.png',
-                                                     delete=False) as temp_img:
-                        image.save(temp_img.name)
-                        custom_config = r'--oem 3 --psm 6 -c preserve_interword_spaces=1'
-                        page_text = pytesseract.image_to_string(
-                            image,
-                            lang='eng+chi_sim+chi_tra',
-                            config=custom_config)
-                        if page_text.strip():
-                            ocr_text += page_text + "\n\n"  # Add page breaks
-                        os.unlink(temp_img.name)
+                for image in images:
+                    if image.mode != 'RGB':
+                        image = image.convert('RGB')
+                    custom_config = r'--oem 3 --psm 6 -c preserve_interword_spaces=1'
+                    page_text = pytesseract.image_to_string(
+                        image,
+                        lang='eng+chi_sim+chi_tra',
+                        config=custom_config)
+                    if page_text.strip():
+                        ocr_text += page_text + "\n\n"
                 if len(ocr_text.strip()) > len(text.strip()):
                     text = ocr_text
-            except ImportError:
-                logging.warning(
-                    "pdf2image not available, using text extraction only")
+            except Exception as e:
+                logging.warning(f"PDF OCR fallback failed: {e}")
 
         return clean_and_preserve_formatting(text)
     except Exception as e:
-        logging.error(f"Error extracting text from PDF: {str(e)}")
+        logging.error(f"Local PDF extraction failed: {e}")
         raise
 
 
