@@ -22,6 +22,16 @@ logging.basicConfig(level=logging.DEBUG)
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "your-secret-key-here")
 
+@app.route("/health")
+def health():
+    import subprocess
+    try:
+        version = subprocess.check_output(["tesseract", "--version"],
+                                          text=True)
+        return f"Tesseract is installed:\n{version}", 200
+    except Exception as e:
+        return f"Tesseract check failed: {e}", 500
+
 # Configuration
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg'}
