@@ -1,18 +1,24 @@
-echo 'FROM python:3.11-slim
+# Use slim Python base image
+FROM python:3.11-slim
 
+# Install Tesseract and dependencies
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
     tesseract-ocr-chi-sim \
     tesseract-ocr-chi-tra \
- && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/*
 
+# Set working directory
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
+# Copy everything into container
 COPY . .
 
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Expose Render port
 EXPOSE 10000
 
-CMD ["gunicorn", "-b", "0.0.0.0:10000", "app:app"]' > Dockerfile
+# Start app with Gunicorn
+CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:10000"]
