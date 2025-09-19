@@ -4,11 +4,8 @@ from flask import Flask, render_template, request, session, jsonify, redirect, u
 from werkzeug.utils import secure_filename
 from PIL import Image
 import PyPDF2
-import io
 from googletrans import Translator
 import uuid
-import tempfile
-import shutil
 import time
 from datetime import datetime
 import requests
@@ -111,3 +108,153 @@ def extract_text_from_pdf(pdf_path):
     except Exception as e:
         logging.error(f"OCR.space failed on PDF: {e}")
         return ""
+
+
+def translate_to_traditional_chinese(text):
+    """Translate text to Traditional Chinese while preserving formatting"""
+    try:
+        if not text.strip():
+            return ""
+        translator = Translator()
+        chunks = []
+        current_chunk = ""
+        lines = text.split('\n')
+        for line in lines:
+            if len(current_chunk + line + '\n') > 500 and current_chunk:
+                chunks.append(current_chunk.rstrip())
+                current_chunk = line + '\n'
+            else:
+                current_chunk += line + '\n'
+        if current_chunk:
+            chunks.append(current_chunk.rstrip())
+
+        translated_chunks = []
+        for chunk in chunks:
+            if not chunk.strip():
+                translated_chunks.append(chunk)
+                continue
+            try:
+                result = translator.translate(chunk.strip(),
+                                              src='auto',
+                                              dest='zh-tw')
+                if result and hasattr(
+                        result,
+                        'text') and result.text and result.text.strip():
+                    translated_chunks.append(result.text)
+                else:
+                    translated_chunks.append(chunk)
+            except Exception as e:
+                logging.warning(f"Translation chunk failed: {e}")
+                translated_chunks.append(chunk)
+
+        return '\n'.join(translated_chunks)
+    except Exception as e:
+        logging.error(f"Translation failed: {str(e)}")
+        return f"翻譯出現錯誤，以下為原始文本：\n\n{text}"
+
+
+@app.route('/')
+def index():
+    """Main page"""
+    session.pop('original_text', None)
+    session.pop('translated_text', None)
+    session.pop('filename', None)
+    return render_template('index.html')
+
+
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    """Handle file upload and processing"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file selected'}), 400
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        if not file.filename or not allowed_file(file.filename):
+            return jsonify({
+                'error':
+                'Invalid file type. Please upload PDF, PNG, or JPG files.'
+            }), 400
+
+        if 'session_id' not in session:
+            session['session_id'] = str(uuid.uuid4())
+
+        original_filename = file.filename or 'uploaded_file'
+        filename = secure_filename(original_filename)
+        if not filename:
+            _, ext = os.path.splitext(original_filename)
+            filename = f'uploaded_file{ext or ".txt"}'
+
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        name, ext = os.path.splitext(filename)
+        session_filename = f"{session['session_id']}_{name}_{timestamp}{ext}"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], session_filename)
+        file.save(filepath)
+
+        file_ext = filename.rsplit('.', 1)[1].lower()
+        if file_ext == 'pdf':
+            original_text = extract_text_from_pdf(filepath)
+        elif file_ext in ['png', 'jpg', 'jpeg']:
+            original_text = extract_text_from_image(filepath)
+        else:
+            raise ValueError("Unsupported file type")
+
+        if not original_text.strip():
+            os.remove(filepath)
+            return jsonify({
+                'error':
+                'No text could be extracted. Please ensure the image contains readable text.'
+            }), 400
+
+        translated_text = translate_to_traditional_chinese(original_text)
+        session['original_text'] = original_text
+        session['translated_text'] = translated_text
+        session['filename'] = original_filename
+        session['filepath'] = filepath
+
+        return jsonify({
+            'success': True,
+            'original_text': original_text,
+            'translated_text': translated_text,
+            'filename': original_filename
+        })
+
+    except Exception as e:
+        logging.error(f"Error processing file: {str(e)}")
+        try:
+            if 'filepath' in locals() and os.path.exists(filepath):
+                os.remove(filepath)
+        except Exception:
+            pass
+        return jsonify({'error': f'Error processing file: {str(e)}'}), 500
+
+
+@app.route('/clear')
+def clear_session():
+    """Clear session data and uploaded files"""
+    try:
+        if 'filepath' in session and os.path.exists(session['filepath']):
+            os.remove(session['filepath'])
+        session.clear()
+        return redirect(url_for('index'))
+    except Exception as e:
+        logging.error(f"Error clearing session: {str(e)}")
+        return redirect(url_for('index'))
+
+
+@app.teardown_appcontext
+def cleanup_files(error):
+    """Clean up temporary files when session ends"""
+    try:
+        from flask import has_request_context
+        if has_request_context() and 'filepath' in session and os.path.exists(
+                session['filepath']):
+            os.remove(session['filepath'])
+    except Exception as e:
+        logging.error(f"Error in cleanup: {str(e)}")
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
